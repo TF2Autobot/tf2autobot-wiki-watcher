@@ -14,6 +14,8 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
 // Private custom endpoint (/webhook/wiki/<private_endpoint>)
 const PRIVATE_ENDPOINT = process.env.PRIVATE_ENDPOINT;
+const WEBHOOK_USERNAME = process.env.WEBHOOK_USERNAME;
+const WEBHOOK_AVATAR_URL = process.env.WEBHOOK_AVATAR_URL;
 
 app.use(express.static('./public'))
     .use(
@@ -67,14 +69,19 @@ app.post(`/webhook/wiki${PRIVATE_ENDPOINT ? `/${PRIVATE_ENDPOINT}` : ''}`, async
         };
     });
 
+    const webhook = {
+        content: `📝 **Wiki update in [${repoName}](${payload.repository.html_url}/wiki)**`,
+        embeds: embeds
+    };
+
+    if (WEBHOOK_USERNAME) webhook.username = WEBHOOK_USERNAME;
+    if (WEBHOOK_AVATAR_URL) webhook.avatar_url = WEBHOOK_AVATAR_URL;
+
     try {
         const response = await fetch(DISCORD_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                content: `📝 **Wiki update in [${repoName}](${payload.repository.html_url}/wiki)**`,
-                embeds: embeds
-            })
+            body: JSON.stringify(webhook)
         });
 
         if (!response.ok) {
