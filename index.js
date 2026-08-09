@@ -41,6 +41,9 @@ app.post(`/webhook/wiki${PRIVATE_ENDPOINT ? `/${PRIVATE_ENDPOINT}` : ''}`, async
     }
 
     const event = req.headers['x-github-event'];
+    if (event === 'ping') {
+        return res.status(200).send('Pong! Webhook is active and configured correctly.');
+    }
     if (event !== 'gollum') {
         return res.status(200).send('Ignored event type. Only listening for gollum.');
     }
