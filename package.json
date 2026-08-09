@@ -1,0 +1,27 @@
+{
+  "name": "tf2autobot-wiki-watcher",
+  "version": "1.0.0",
+  "description": "Process gollum webhook from github and send it to (Discord) webhook",
+  "keywords": [
+    "wiki"
+  ],
+  "homepage": "https://github.com/TF2Autobot/tf2autobot-wiki-watcher#readme",
+  "bugs": {
+    "url": "https://github.com/TF2Autobot/tf2autobot-wiki-watcher/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TF2Autobot/tf2autobot-wiki-watcher.git"
+  },
+  "license": "MIT",
+  "author": "IdiNium",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}
