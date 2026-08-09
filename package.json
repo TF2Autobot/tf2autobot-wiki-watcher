@@ -1,6 +1,6 @@
 {
   "name": "tf2autobot-wiki-watcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Process gollum webhook from github and send it to (Discord) webhook",
   "keywords": [
     "wiki"
