@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: './.env' });
 
+import fs from 'fs';
+const pkg = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url)));
+process.env.WATCHER_VERSION = pkg.version;
+
 import express from 'express';
 import crypto from 'crypto';
 
@@ -17,6 +21,11 @@ const PRIVATE_ENDPOINT = process.env.PRIVATE_ENDPOINT;
 const WEBHOOK_USERNAME = process.env.WEBHOOK_USERNAME;
 const WEBHOOK_AVATAR_URL = process.env.WEBHOOK_AVATAR_URL;
 
+if (!DISCORD_WEBHOOK_URL) {
+    console.error('FATAL: DISCORD_WEBHOOK_URL is missing from environment variables.');
+    process.exit(1);
+}
+
 app.use(express.static('./public'))
     .use(
         express.json({
@@ -26,17 +35,19 @@ app.use(express.static('./public'))
         })
     )
     .use((req, res, next) => {
-        console.info(`${req.method} request to${req.url}`);
+        console.info(`${req.method} request to ${req.url}`);
         next();
     });
 
 app.post(`/webhook/wiki${PRIVATE_ENDPOINT ? `/${PRIVATE_ENDPOINT}` : ''}`, async (req, res) => {
     if (GITHUB_WEBHOOK_SECRET) {
-        const signature = req.headers['x-hub-signature-256'];
+        const signature = req.headers['x-hub-signature-256'] || '';
+        const signatureBuffer = Buffer.from(signature);
         const hmac = crypto.createHmac('sha256', GITHUB_WEBHOOK_SECRET);
-        const digest = 'sha256=' + hmac.update(req.rawBody).digest('hex');
+        const digest = 'sha256=' + hmac.update(req.rawBody || '').digest('hex');
+        const digestBuffer = Buffer.from(digest);
 
-        if (signature !== digest) {
+        if (signatureBuffer.length !== digestBuffer.length || !crypto.timingSafeEqual(signatureBuffer, digestBuffer)) {
             console.warn('Unauthorized webhook attempt rejected.');
             return res.status(401).send('Unauthorized: Signature mismatch');
         }
@@ -51,26 +62,54 @@ app.post(`/webhook/wiki${PRIVATE_ENDPOINT ? `/${PRIVATE_ENDPOINT}` : ''}`, async
     }
 
     const payload = req.body;
+    if (!payload || !Array.isArray(payload.pages) || !payload.sender || !payload.repository) {
+        return res.status(400).send('Bad Request: Malformed payload');
+    }
+
     const sender = payload.sender.login;
     const repoName = payload.repository.full_name;
 
-    // Safety check: Discord limits messages to a maximum of 10 embeds
-    const embeds = payload.pages.slice(0, 10).map(page => {
-        return {
-            title: `Wiki Page ${page.action === 'created' ? 'Created' : 'Edited'}: ${page.title}`,
-            url: page.html_url,
-            color: page.action === 'created' ? 0x28a745 : 0x0366d6,
-            author: {
-                name: sender,
-                icon_url: payload.sender.avatar_url,
-                url: payload.sender.html_url
-            },
-            description: `Commit: \`${page.sha.substring(0, 7)}\``
-        };
+    const changes = {
+        created: [],
+        edited: []
+    };
+
+    payload.pages.forEach(page => {
+        changes[page.action === 'created' ? 'created' : 'edited'].push(
+            `[${page.title}](${page.html_url})\n` +
+                `📜 Summary: ${page.summary || '*No summary provided*'}\n` +
+                `#️⃣ Commit: \`${page.sha.substring(0, 7)}\``
+        );
     });
 
+    const embeds = [];
+
+    ['created', 'edited'].forEach(action => {
+        if (changes[action].length > 0) {
+            const embed = {
+                title: `Wiki Page${changes[action].length > 1 ? 's' : ''} ${action.charAt(0).toUpperCase() + action.slice(1)}`,
+                color: action === 'created' ? 0x28a745 : 0x0366d6,
+                author: {
+                    name: sender,
+                    icon_url: payload.sender.avatar_url,
+                    url: payload.sender.html_url
+                },
+                description: '- ' + changes[action].join('\n- ')
+            };
+            embeds.push(embed);
+        }
+    });
+
+    if (embeds.length > 0) {
+        const lastEmbed = embeds[embeds.length - 1]; // Get last item safely
+        lastEmbed.footer = {
+            text: `v${process.env.WATCHER_VERSION}`
+        };
+        lastEmbed.timestamp = new Date().toISOString();
+    }
+
     const webhook = {
-        content: `📝 **Wiki update in [${repoName}](${payload.repository.html_url}/wiki)**`,
+        content: `📝 [${repoName}](${payload.repository.html_url}/wiki)`,
         embeds: embeds
     };
 
